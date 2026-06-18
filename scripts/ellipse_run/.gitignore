@@ -1,0 +1,4 @@
+# run outputs
+pose_log.csv
+*.png
+__pycache__/

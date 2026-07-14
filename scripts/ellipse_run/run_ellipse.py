@@ -31,6 +31,7 @@ ELLIPSE_A = 2.0  # X方向の半径[m]
 ELLIPSE_B = 1.2  # Y方向の半径[m]
 TARGET_SPEED = 0.4  # 目標速度[m/s]
 N_LAPS = 1  # 周回数
+MAX_RUN_SECONDS = 2.0  # 最大走行時間[s]
 
 # Pure Pursuitの前方注視距離
 LOOKAHEAD = 0.6
@@ -141,12 +142,18 @@ def main():
     # 前回の処理時刻
     t_prev = time.time()
 
+    # 走行開始時刻
+    t_start = time.monotonic()
+
     # 走行ログ
     log = []
 
+    # 停止理由
+    stop_reason = "unknown"
+
     print(
         f"start: {control_mode}, target {goal_distance:.2f} m "
-        f"({N_LAPS} lap(s)) -- Ctrl-C to stop"
+        f"({N_LAPS} lap(s)), max {MAX_RUN_SECONDS:.1f} s -- Ctrl-C to stop"
     )
 
     try:
@@ -179,6 +186,13 @@ def main():
             traveled = abs(dist)
 
             if traveled >= goal_distance:
+                stop_reason = "distance goal reached"
+                break
+
+            # 最大走行時間に到達したら終了
+            elapsed = time.monotonic() - t_start
+            if elapsed >= MAX_RUN_SECONDS:
+                stop_reason = "time limit reached"
                 break
 
             # ステアリング角を計算
@@ -201,6 +215,7 @@ def main():
 
     except KeyboardInterrupt:
         # Ctrl+Cが押された場合
+        stop_reason = "interrupted"
         print("\ninterrupted")
 
     finally:
@@ -212,7 +227,10 @@ def main():
         if use_hardware and driver.pi is not None:
             driver.pi.stop()
 
-        print(f"done: {len(log)} steps, traveled {abs(odo.distance):.2f} m")
+        print(
+            f"done: {len(log)} steps, traveled {abs(odo.distance):.2f} m, "
+            f"reason: {stop_reason}"
+        )
 
         # ログと走行軌跡を保存
         save_log(log)

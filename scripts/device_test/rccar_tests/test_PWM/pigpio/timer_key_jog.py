@@ -71,7 +71,7 @@ pi.set_mode(gppin_str, pigpio.OUTPUT)
 
 
 # 起動直後は一度中立付近の信号を出して、ESCとサーボを安定させる。
-pi.hardware_PWM(gppin_acc, PWM_Hz, duty100(10.5))#ピン番号, 周波数_Hz, duty値
+pi.hardware_PWM(gppin_acc, PWM_Hz, duty100(10.5))
 pi.hardware_PWM(gppin_str, PWM_Hz, duty100(10.5))
 time.sleep(1)
 
@@ -84,11 +84,10 @@ try:                        # try:の部分にループ処理を書く
     i = 0
     start_time = time.monotonic()
     while True:
-        # ループ回数を数える。から計測
+        # ループ回数を数える。
         i = i + 1
 
         # 指定時間を超えたら中立停止処理へ進む。
-        # 現在の時刻を秒で返す。経過時間を計測
         if time.monotonic() - start_time >= RUN_SECONDS:
             print("time limit reached")
             break

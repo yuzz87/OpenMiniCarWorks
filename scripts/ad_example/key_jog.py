@@ -42,6 +42,7 @@ PWM_Hz = 70
 PWM_NeutralStr = 10.00  #@70Hz
 PWM_NeutralSpd = 10.48 #@70Hz
 PWM_CruiseSpd = 10.48 + 1.4 #@70Hz # Cruising speed 
+RUN_SECONDS = 10.0  # 最大実行時間[s]
 
 spd_ref = PWM_NeutralSpd
 str_ref = PWM_NeutralStr
@@ -63,15 +64,20 @@ pi.hardware_PWM(gppin_str, PWM_Hz, duty100(10.5))
 time.sleep(1)
 
 def write_help():
-    print("Enter: stop, w&d:speed, a&d:steering")
+    print("Enter: stop, w&d:speed, a&d:steering, auto stop after {:.1f} s".format(RUN_SECONDS))
 
 write_help()
 
 try:                        # try:の部分にループ処理を書く
     i = 0
+    start_time = time.monotonic()
     while True:
         # loop count
         i = i + 1
+
+        if time.monotonic() - start_time >= RUN_SECONDS:
+            print("time limit reached")
+            break
         
         # key polling
         key = utilities.getkey()
@@ -117,4 +123,3 @@ pi.hardware_PWM(gppin_acc, PWM_Hz, duty100(PWM_NeutralSpd))
 pi.hardware_PWM(gppin_str, PWM_Hz, duty100(PWM_NeutralStr))
 #pi.stop()
 print("finish.")
-

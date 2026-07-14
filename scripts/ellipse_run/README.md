@@ -35,6 +35,8 @@ sudo pigpiod                 # pigpio デーモン起動（必須）
 python3 run_ellipse.py
 ```
 `RPi.GPIO`（エンコーダ）と `pigpio`（サーボ）が必要。停止は Ctrl-C（即ニュートラル）。
+通常は `N_LAPS` で決まる目標距離、または `MAX_RUN_SECONDS` の最大走行時間の
+どちらかに先に到達した時点で停止する。
 
 ## 事前キャリブレーション（`run_ellipse.py` の PARAMETERS を実測値に）
 
@@ -46,10 +48,12 @@ python3 run_ellipse.py
 | `STEER_RANGE_US` | 全舵角時の pulsewidth 振れ幅 | key_calib |
 | `STEER_SIGN` | 左右が逆なら -1 | 実走で確認 |
 | `THROTTLE_DRIVE_US` | 前進スロットル（このESCは中立より小=前進） | `speed_observer.py` で速度実測 |
+| `MAX_RUN_SECONDS` | 最大走行時間[s] | 初回は短めに設定 |
 
 ## 安全・注意
 - **最小回転半径**: 楕円の短軸がきついと曲がりきれない。起動時に警告を表示。
 - **ヘディング drift**: IMU 無し・ステア開ループのため周回で誤差が蓄積。MVP は1〜数周で評価。
+- **時間制限**: 参照軌道から外れても自動では検出しないため、実機では `MAX_RUN_SECONDS` を短めにする。
 - 実走は広い屋内・低速から。手元で即ニュートラル停止できる体制で。
 
 ## 将来拡張（LiDAR）

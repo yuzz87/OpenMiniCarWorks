@@ -1,7 +1,20 @@
+# カメラ画像処理と表示に使うOpenCV。
 opencv-python==4.8.0.76
+
+# 画像配列、HSV値、連結成分結果などの数値処理に使う。
 numpy==1.24.3
+
+# 古いPython環境向けのtypingバックポート。
 typing==3.7.4.3
+
+# Raspberry PiのGPIO入力、主にエンコーダ読み取りに使う。
 RPi.GPIO==0.7.1
+
+# Raspberry Piでサーボ/ESC用PWMを出すために使う。
 pigpio==1.78
+
+# numpyが重複しているが、バージョン指定は同じ。
 numpy==1.24.3
+
+# RPLidarのシリアル通信とスキャン取得に使う。
 rplidar-roboticia==0.9.5

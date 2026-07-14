@@ -1,8 +1,10 @@
 ### PARAMETERS START ### : edit these parameters
 
+# Raspberry Pi上で実機制御まで行うかどうか。
+# Trueの場合は pigpio と RPi.GPIO 系の処理を使い、車両が動く可能性がある。
 use_raspi = True # true to run on raspberry pi
 
-# color detector parameters
+# 色検出の設定値。
 update_rate = 20 # frame update rate
 frame_width = 160 # frame width
 frame_height = 120 # frame height
@@ -15,15 +17,17 @@ hsv_range_list = [ # hsv range for each color [(hsv_low), (hsv_high)] h:0-255 s:
     [(120, 100, 70), (190, 255, 255)], # blue
 ]
 
-# speed observer parameters
+# 速度観測用エンコーダの設定値。wheel_diameterの単位は[m]。
 n_teeth = 36 # number of teeth on encoder
 wheel_diameter = 0.06 # wheel diameter in meters
 
-# gpio parameters
+# GPIOとPWM出力の設定値。ピン番号はBCM GPIO番号。
 STEER_PIN = 17
 THROTTLE_PIN = 18
 ENCODER_A_PIN = 22
 ENCODER_B_PIN = 27
+
+# サーボ/ESCの中立パルス幅[us]。
 NEUTERAL_INPUT = 1500
 
 ### PARAMETERS END ###
@@ -38,7 +42,7 @@ import numpy as np
 import time
 from typing import List
 
-# create pigpio instance
+# Raspberry Pi実行時だけpigpioへ接続する。
 if use_raspi:
     raspi = pigpio.pi()
 
@@ -48,8 +52,12 @@ def custom_control_function(
         area_list: List[float],
         speed: float
     ):
+    # 色検出結果と速度観測値から、ステアリングとスロットルを決めるユーザー制御部。
+    # centroid_list と area_list は hsv_range_list と同じ順番で並ぶ。
+    # このサンプルでは緑色の重心を画面中央へ寄せるようにステアリングを切る。
     ### CONTROL START ### : place your code here to control the car
 
+    # 検出色ごとの最大領域の重心と面積を取り出す。未検出の場合、重心はNoneになる。
     white_centroid = centroid_list[0]
     white_area = area_list[0]
 
@@ -65,15 +73,18 @@ def custom_control_function(
     blue_centroid = centroid_list[4]
     blue_area = area_list[4]
 
-    # calculate steering and throttle
+    # ステアリングとスロットルのオフセット[us]を計算する。
     steer = 0
     throttle = 0
     if green_centroid is not None:
+        # 画面中心からの横方向ずれを -1.0 から +1.0 程度に正規化する。
         center_error = (green_centroid[0] - frame_width/2) / (frame_width/2) 
+        # ずれに比例してステアリングを切る。符号は実車の取り付け方向に依存する。
         steer = -600 * center_error
+        # 大きく曲がるほど速度を落とす簡易制御。
         throttle = 30 * (1-0.3*abs(center_error))
 
-    # set steering and throttle
+    # 実機実行時だけサーボ/ESCへパルス幅[us]を出力する。
     if use_raspi:
         raspi.set_servo_pulsewidth(STEER_PIN, NEUTERAL_INPUT + steer)
         raspi.set_servo_pulsewidth(THROTTLE_PIN, NEUTERAL_INPUT - throttle)
@@ -86,17 +97,18 @@ def run(
         q_speed: multiprocessing.Queue,
         show_image: bool
     ):
+    # 色検出プロセス群と速度観測プロセスから最新値を集め、制御関数を周期的に呼ぶ。
     ### SETUP START ### : place your code here to run once
 
-    # initialize variables
+    # 各色の検出結果、速度、表示用フレームを保持する。
     color_stats_list = [None for i in range(len(hsv_range_list))]
     speed = None
     frame = None
 
-    # set steering and throttle to neuteral
+    # 起動時にステアリングとスロットルを中立へ戻す。
     neuteral()
 
-    # check if all color detectors are ready
+    # 各色の検出プロセスが最初の結果を出すまで待つ。
     for i, q_stats in enumerate(q_stats_list):
         while True:
             try:
@@ -107,7 +119,7 @@ def run(
                 continue
     frame = color_stats_list[0][0]
 
-    # check if speed observer is ready
+    # Raspberry Pi実行時は、速度観測プロセスが最初の値を出すまで待つ。
     if use_raspi:
         while True:
             try:
@@ -122,7 +134,7 @@ def run(
     ### LOOP START ### : place your code here to run repeatedly
 
     while True:
-        # get color detection results
+        # 各色の検出結果を、キューに新しい値がある場合だけ更新する。
         frame_updated = False
         for i, q_stats in enumerate(q_stats_list):
             try:
@@ -133,13 +145,13 @@ def run(
             except multiprocessing.queues.Empty:
                 continue
 
-        # get speed
+        # エンコーダ速度[m/s]も、新しい値があれば更新する。
         try:
             speed = q_speed.get(block=False)
         except multiprocessing.queues.Empty:
             pass
 
-        # get stats of largest component for each color
+        # 各色について、最大の連結成分の重心と面積を取り出す。
         centroid_list = []
         area_list = []
         for color_stats in color_stats_list:
@@ -148,14 +160,14 @@ def run(
             area_list.append(area)
 
         if show_image and frame_updated:
-            # rotate image
+            # カメラ取り付け向きに合わせ、表示画像を180度回転する。
             frame = cv2.rotate(frame, cv2.ROTATE_180)
 
-            # show image
+            # 検出結果を重ねたフレームを表示する。
             cv2.imshow('frame', frame)
             cv2.waitKey(1)
 
-        # control car
+        # 最新の色検出結果と速度を使って車両制御を行う。
         custom_control_function(centroid_list, area_list, speed)
 
     ### LOOP END ###
@@ -171,44 +183,46 @@ def get_largest_component(
     color_stats: color detection results
     frame: frame to draw bounding box and centroid
     '''
+    # ColorDetector.getConnectedComponents() の出力を展開する。
     _frame, n_labels, labels, stats, centroids, bgr_disp = color_stats
 
-    # initialize variables
+    # 対象色が見つからなかった場合はNoneを返す。
     centroid = None
     area = None
 
-    # if connected components exist (excluding background)
+    # ラベル0は背景なので、n_labels >= 2 のとき対象色の領域がある。
     if n_labels >= 2:
-        # get largest connected component
+        # 背景を除き、最大面積の連結成分を対象物として選ぶ。
         max_idx = np.argmax(stats[1:, cv2.CC_STAT_AREA]) + 1
 
-        # get centroid and area of largest component
+        # 最大成分の外接矩形、面積、重心を取り出す。
         left, top, width, height, area = stats[max_idx]
         centroid = centroids[max_idx]
 
         if show_image:
-            # draw bounding box for largest component
+            # 表示用フレームへ外接矩形を描画する。
             cv2.rectangle(frame, (left, top), (left + width, top + height), bgr_disp, 2)
 
-            # draw red circle for centroid
+            # 最大成分の重心を描画する。
             cv2.circle(frame, (int(centroid[0]), int(centroid[1])), 5, bgr_disp, -1)
 
     return centroid, area
 
 
 def neuteral():
+    # 実機実行時だけ、ステアリングとスロットルを中立パルス幅[us]へ戻す。
     if use_raspi:
         raspi.set_servo_pulsewidth(STEER_PIN,NEUTERAL_INPUT)
         raspi.set_servo_pulsewidth(THROTTLE_PIN,NEUTERAL_INPUT)
 
 
 def main():
-    # round up parameters to prevent opencv error
+    # OpenCVやカメラドライバの制約に合わせ、幅は32、高さは16の倍数に丸める。
     global frame_width, frame_height
     frame_width = 32 * round(frame_width / 32)
     frame_height = 16 * round(frame_height / 16)
 
-    # create queues
+    # 色ごとのフレーム、二値画像、連結成分結果を受け渡すキューを作る。
     q_frame_list = []
     q_bin_list = []
     q_stats_list = []
@@ -218,7 +232,7 @@ def main():
         q_stats_list.append(multiprocessing.Queue(maxsize=2))
     q_speed = multiprocessing.Queue(maxsize=10)
 
-    # create processes
+    # カメラ取得、色ごとの二値化、連結成分解析、速度観測、制御ループを別プロセスで動かす。
     processes: List[multiprocessing.Process] = []
     processes.append(
         multiprocessing.Process(
@@ -253,16 +267,16 @@ def main():
         )
     )
 
-    # start processes
+    # すべての処理プロセスを開始する。
     for process in processes:
         process.start()
 
-    # wait for keyboard interrupt
+    # Ctrl-Cが押されるまでメインプロセスは待機する。
     try:
         while True:
             time.sleep(1e5)
     except KeyboardInterrupt:
-        # close processes
+        # 終了時は子プロセスを停止し、車両を中立へ戻す。
         for process in processes:
             process.terminate()
             process.join()

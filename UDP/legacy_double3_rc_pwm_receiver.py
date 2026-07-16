@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Receive current Simulink double x3 packets and optionally output RC PWM.
+"""現在のSimulink double x3パケットを受信し、必要に応じてRC用PWMを出力する。
 
-Default mode is dry-run. GPIO, pigpio, ESC, and steering PWM are accessed only
-when --enable-hardware and the safety confirmation options are explicitly used.
+既定ではドライランで動作する。GPIO、pigpio、ESC、ステアリングPWMへは、
+--enable-hardware と安全確認オプションを明示したときだけアクセスする。
 
-Current observed packet format:
+現在確認しているパケット形式:
 - little-endian float64 x 3
 - [legacy_motor_1, legacy_motor_2, legacy_servo_deg]
 
-Dry-run/hardware interpretation:
-- legacy_motor_1/2 are averaged, then converted to target speed [m/s] by
-  --speed-per-legacy-unit.
-- legacy_servo_deg is converted to estimated steering angle [deg] by:
+ドライラン/実機モードでの解釈:
+- legacy_motor_1/2 は平均した後、--speed-per-legacy-unit により
+  目標速度 [m/s] へ変換する。
+- legacy_servo_deg は次の式で推定ステア角 [deg] へ変換する。
   steer_deg = legacy_steer_a * legacy_servo_deg + legacy_steer_b
 
-Units:
+単位:
 - target_speed_mps: m/s
 - target_steer_rad: rad
 - PWM duty: percent
@@ -34,12 +34,12 @@ FMT = "<ddd"
 NBYTES = struct.calcsize(FMT)
 MAX_PACKET_BYTES = 1024
 
-# PWM output settings. GPIO numbers are BCM.
+# PWM出力設定。GPIO番号はBCM表記。
 DEFAULT_PWM_HZ = 70
 DEFAULT_ESC_GPIO = 12
 DEFAULT_STEERING_GPIO = 13
 
-# Current RC-car calibration values. Duty is percent.
+# 現在のRCカー校正値。dutyの単位は[%]。
 DEFAULT_STEERING_NEUTRAL_DUTY = 10.895
 DEFAULT_ESC_NEUTRAL_DUTY = 10.55
 
@@ -60,7 +60,7 @@ DEFAULT_MAX_SPEED_MPS = 0.30
 DEFAULT_MAX_STEER_RAD = math.radians(18.0)
 ZERO_SPEED_EPS_MPS = 1e-6
 
-# From the Simulink diagram: y = -0.8246 x + 74.212
+# Simulink図面の線形式: y = -0.8246 x + 74.212
 DEFAULT_LEGACY_STEER_A = -0.8246
 DEFAULT_LEGACY_STEER_B = 74.212
 DEFAULT_MOTOR_MISMATCH_TOL = 1e-6
@@ -288,7 +288,7 @@ def setup_hardware(args):
 
     pi = pigpio.pi()
     if not pi.connected:
-        raise RuntimeError("pigpio daemon not running (start it: sudo pigpiod)")
+        raise RuntimeError("pigpioデーモンが起動していません（sudo pigpiod で起動してください）")
 
     pi.set_mode(args.esc_gpio, pigpio.OUTPUT)
     pi.set_mode(args.steering_gpio, pigpio.OUTPUT)
@@ -299,21 +299,21 @@ def validate_hardware_options(args, parser):
     if not args.enable_hardware:
         return
     if not args.confirm_wheels_lifted:
-        parser.error("--enable-hardware requires --confirm-wheels-lifted")
+        parser.error("--enable-hardware を使うには --confirm-wheels-lifted が必要です")
     if not args.confirm_power_cutoff:
-        parser.error("--enable-hardware requires --confirm-power-cutoff")
+        parser.error("--enable-hardware を使うには --confirm-power-cutoff が必要です")
     if args.allow_limited_output and not args.confirm_accept_limited_output:
         parser.error(
-            "--enable-hardware with --allow-limited-output requires "
-            "--confirm-accept-limited-output"
+            "--enable-hardware と --allow-limited-output を使うには "
+            "--confirm-accept-limited-output が必要です"
         )
     if args.speed_per_legacy_unit <= 0.0:
-        parser.error("--enable-hardware requires --speed-per-legacy-unit > 0")
+        parser.error("--enable-hardware を使うには --speed-per-legacy-unit > 0 が必要です")
 
 
 def make_parser():
     parser = argparse.ArgumentParser(
-        description="Receive legacy double x3 UDP packets and output RC PWM."
+        description="legacy double x3 のUDPパケットを受信し、RC用PWMへ変換する。"
     )
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -348,19 +348,19 @@ def make_parser():
         "--speed-per-legacy-unit",
         type=float,
         default=0.0,
-        help="Linear scale from legacy motor command to speed [m/s].",
+        help="legacy motor command を速度 [m/s] へ変換する線形スケール。",
     )
     parser.add_argument(
         "--legacy-steer-a",
         type=float,
         default=DEFAULT_LEGACY_STEER_A,
-        help="Legacy servo deg to actual steer deg slope.",
+        help="legacy servo値[deg]から実ステア角[deg]へ変換する傾き。",
     )
     parser.add_argument(
         "--legacy-steer-b",
         type=float,
         default=DEFAULT_LEGACY_STEER_B,
-        help="Legacy servo deg to actual steer deg intercept.",
+        help="legacy servo値[deg]から実ステア角[deg]へ変換する切片。",
     )
     parser.add_argument(
         "--motor-mismatch-tol",
@@ -371,54 +371,54 @@ def make_parser():
         "--param-init-servo-deg",
         type=float,
         default=DEFAULT_PARAM_INIT_SERVO_DEG,
-        help="Legacy servo value treated as Param_init neutral [deg].",
+        help="Param_init の中立値として扱う legacy servo値[deg]。",
     )
     parser.add_argument(
         "--param-init-tol",
         type=float,
         default=DEFAULT_PARAM_INIT_TOL,
-        help="Tolerance for detecting Param_init neutral packet.",
+        help="Param_init 中立パケットを判定する許容誤差。",
     )
     parser.add_argument(
         "--watchdog-timeout",
         type=float,
         default=DEFAULT_WATCHDOG_TIMEOUT_SECONDS,
-        help="Timeout [s] before neutral PWM is commanded.",
+        help="中立PWMを出すまでのタイムアウト[s]。",
     )
     parser.add_argument(
         "--socket-timeout",
         type=float,
         default=DEFAULT_SOCKET_TIMEOUT_SECONDS,
-        help="UDP receive polling timeout [s].",
+        help="UDP受信ポーリングのタイムアウト[s]。",
     )
     parser.add_argument(
         "--enable-hardware",
         action="store_true",
-        help="Actually output PWM using pigpio. Default is dry-run.",
+        help="pigpioを使って実際にPWMを出力する。既定はドライラン。",
     )
     parser.add_argument(
         "--allow-limited-output",
         action="store_true",
         help=(
-            "Output speed/steering after applying configured limits instead of "
-            "rejecting negative_speed/clamped_speed/clamped_steer commands. "
-            "Other invalid commands are still rejected."
+            "negative_speed / clamped_speed / clamped_steer を拒否せず、"
+            "設定した制限を適用した後の速度・操舵を出力する。"
+            "それ以外の不正指令は引き続き拒否する。"
         ),
     )
     parser.add_argument(
         "--confirm-accept-limited-output",
         action="store_true",
-        help="Required with --enable-hardware and --allow-limited-output.",
+        help="--enable-hardware と --allow-limited-output を使うときに必要。",
     )
     parser.add_argument(
         "--confirm-wheels-lifted",
         action="store_true",
-        help="Required with --enable-hardware.",
+        help="--enable-hardware を使うときに必要。",
     )
     parser.add_argument(
         "--confirm-power-cutoff",
         action="store_true",
-        help="Required with --enable-hardware.",
+        help="--enable-hardware を使うときに必要。",
     )
     return parser
 
@@ -436,7 +436,7 @@ def run_receiver(args):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((args.host, args.port))
         sock.settimeout(args.socket_timeout)
-        print(f"listening on {(args.host, args.port)}")
+        print(f"受信待機中 {(args.host, args.port)}")
         print(
             "mode={}, packet=float64x3, pwm_hz={}, esc_gpio={}, "
             "steering_gpio={}, watchdog_timeout={:.3f} s, "
@@ -475,7 +475,7 @@ def run_receiver(args):
 
                 raw_values = decode_packet(packet)
                 if raw_values is None:
-                    print(f"invalid packet from {sender}: {len(packet)} bytes")
+                    print(f"不正なパケット {sender}: {len(packet)} bytes")
                     command = make_neutral_command(args, "invalid_neutral")
                     output_command(pi, args, command, None)
                     continue
@@ -483,9 +483,9 @@ def run_receiver(args):
                 command = make_pwm_command(raw_values, args)
                 output_received_command(pi, args, command, sender)
         except KeyboardInterrupt:
-            print("stopped by Ctrl-C")
+            print("Ctrl-Cにより停止しました")
         finally:
-            print("neutral before shutdown")
+            print("終了前に中立を出力します")
             try:
                 output_command(pi, args, neutral_command, None)
                 if args.enable_hardware:

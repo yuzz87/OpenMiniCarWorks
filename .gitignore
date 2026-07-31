@@ -38,3 +38,9 @@ __pycache__/
 # LiDAR experiment outputs
 scripts/device_test/rccar_tests/test_lidar/lidar_scan.csv
 scripts/device_test/rccar_tests/test_lidar/lidar_scan.png
+
+# Documentation and experiment logs are kept locally
+docs/
+*.md
+*.MD
+raspi_logs/

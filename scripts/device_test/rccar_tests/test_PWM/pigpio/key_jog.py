@@ -1,4 +1,4 @@
-# Jog operation with keyboard 
+# Jog operation with keyboard
 #
 # Copyright (c) 2023 MODECO
 # Released under the MIT license.
@@ -7,7 +7,7 @@
 # [NOTE]
 # (need to start pigpio daemon before running this script, )
 # sudo pigpiod
-# 
+#
 # (to install pigpio, )
 # sudo apt-get install pigpio
 
@@ -20,7 +20,7 @@ import pigpio
 # duty比[%]をpigpioへ渡す整数値に変換する。
 def duty100(rate):
     # 安全のため、入力されたduty比[%]をこの範囲に制限する。
-    PWM_SAFE_MIN = 7.50 
+    PWM_SAFE_MIN = 7.50
     PWM_SAFE_MAX = 13.00
     if rate > PWM_SAFE_MAX:
         rate = PWM_SAFE_MAX
@@ -35,8 +35,8 @@ print("PWM Jog control...")
 
 Delta_Jog = 0.145 # キー1回あたりの調整量
 
-#PWM_Hz = 60 
-#PWM_NeutralSpd = 8.695  #@60Hz 
+#PWM_Hz = 60
+#PWM_NeutralSpd = 8.695  #@60Hz
 #PWM_NeutralStr = 8.695  #@60Hz
 
 # PWM周波数[Hz]。
@@ -92,7 +92,7 @@ try:                        # try:の部分にループ処理を書く
         if time.monotonic() - start_time >= RUN_SECONDS:
             print("time limit reached")
             break
-        
+
         # キー入力を確認する。入力がない場合は0が返る。
         key = utilities.getkey()
         if key == 10:
@@ -108,7 +108,7 @@ try:                        # try:の部分にループ処理を書く
             str_ref = str_ref - Delta_Jog * 4
         if key == ord('d'):
             # ステアリングを右方向へ動かす。
-            str_ref = str_ref + Delta_Jog * 4 
+            str_ref = str_ref + Delta_Jog * 4
         if key == ord('n'):
             # 速度とステアリングを中立へ戻す。
             str_ref = PWM_NeutralStr
@@ -117,17 +117,17 @@ try:                        # try:の部分にループ処理を書く
         pi.hardware_PWM(gppin_acc, PWM_Hz, duty100(spd_ref))
         # 現在のステアリング指令をサーボへ出力する。
         pi.hardware_PWM(gppin_str, PWM_Hz, duty100(str_ref))
-        
+
         # 現在の指令値を定期的に表示する。
         if i % 20 == 0:
             print("str,spd=",'{:.4g}'.format(str_ref), '{:.4g}'.format(spd_ref))
         if i % 200 == 0:
             write_help()
-            
+
         # 制御周期を約10 msにする。
         time.sleep(0.01)
-        
-        
+
+
 except KeyboardInterrupt:   # exceptに例外処理を書く
     print('stop!')
     # Ctrl-C時は速度を中立へ戻す。
